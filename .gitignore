@@ -4,6 +4,9 @@ config.json
 # 分享数据文件（导出数据）
 todos-data.json
 
+# Claude Code 配置（个人隐私，不含项目信息）
+CLAUDE.md
+
 # macOS
 .DS_Store
 
