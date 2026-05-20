@@ -1,0 +1,18 @@
+{
+  "name": "交互式待办清单",
+  "short_name": "待办清单",
+  "description": "一个简洁的待办事项管理工具，支持 DDL 倒计时和 AI 智能总结",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

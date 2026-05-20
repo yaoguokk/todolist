@@ -2,8 +2,17 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>交互式待办清单</title>
+
+  <!-- PWA / iOS 支持 -->
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="待办清单">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon.svg">
   <style>
     /* ============================================================
        CSS 变量
@@ -31,7 +40,8 @@
       display: flex;
       justify-content: center;
       align-items: flex-start;
-      padding: 50px 16px 60px;
+      padding: max(50px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+               max(60px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
       background: linear-gradient(135deg, var(--bg-start), var(--bg-mid), var(--bg-end));
       font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
       color: var(--text-primary);
@@ -1336,6 +1346,11 @@
       renderTodoList();                // 首次渲染
     }
     init();
+
+    // 注册 Service Worker（PWA）
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js');
+    }
   </script>
 </body>
 </html>
