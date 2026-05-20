@@ -1326,6 +1326,7 @@
     aiToggle.addEventListener('change', () => {
       aiToggleEnabled = aiToggle.checked;
       localStorage.setItem('ai_toggle_enabled', aiToggleEnabled);
+      updateConfigUI();
       // 开关打开时，为已有事项补充总结
       if (aiToggleEnabled && isSummaryAvailable()) {
         todos.forEach(todo => {
