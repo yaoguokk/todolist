@@ -113,6 +113,60 @@
     }
     .config-warn:hover::after { opacity: 1; }
 
+    /* 今日总结模块 */
+    .today-summary {
+      display: none;
+      margin-bottom: 18px; padding: 14px 16px;
+      background: rgba(167,139,250,0.06);
+      border: 1px solid rgba(167,139,250,0.15);
+      border-radius: 14px; overflow: hidden;
+      transition: opacity 0.3s;
+    }
+    .today-summary.has-items { display: block; }
+    .today-summary-header {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px;
+    }
+    .today-summary-header .today-icon {
+      font-size: 18px;
+    }
+    .today-summary-header .today-title {
+      font-size: 13px; font-weight: 650; color: rgba(255,255,255,0.6);
+    }
+    .today-summary-header .today-count {
+      font-size: 13px; font-weight: 700; color: var(--accent-purple);
+    }
+    .today-summary-list {
+      list-style: none; display: flex; flex-direction: column; gap: 5px;
+    }
+    .today-summary-item {
+      font-size: 13px; color: rgba(255,255,255,0.5);
+      padding: 6px 10px; border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,0.03);
+      transition: all 0.2s;
+      display: flex; align-items: center; gap: 6px;
+      word-break: break-word;
+    }
+    .today-summary-item:hover {
+      background: rgba(167,139,250,0.12); color: rgba(255,255,255,0.8);
+    }
+    .today-summary-item .item-check {
+      color: var(--accent-purple); font-size: 12px; flex-shrink: 0;
+    }
+    .today-summary-item .item-time {
+      font-size: 10px; color: rgba(255,255,255,0.25); flex-shrink: 0;
+      margin-left: auto; padding-left: 8px;
+    }
+
+    /* 跳转高亮动画 */
+    .todo-item.flash-highlight {
+      animation: flashBg 1.2s ease-out;
+    }
+    @keyframes flashBg {
+      0%   { background: rgba(167,139,250,0.35); }
+      100% { background: rgba(255,255,255,0.05); }
+    }
+
     /* AI 总结触发按钮（卡片第三行） */
     .ai-trigger {
       border: none; background: none; font-size: 11px;
@@ -440,7 +494,7 @@
 
     /* ========== 响应式 ========== */
     @media (max-width: 520px) {
-      body { padding-top: 24px; }
+      body { padding-top: max(44px, env(safe-area-inset-top)); }
       .container { width: 96%; padding: 20px 12px; border-radius: 18px; }
       h1 { font-size: 21px; }
       .input-row { flex-direction: column; }
@@ -460,6 +514,16 @@
     <div class="top-tips">
       <span class="config-status off" id="configStatus"></span>
       <span class="config-warn" id="configWarn" style="display:none;" data-tip="">!</span>
+    </div>
+
+    <!-- ====== 今日总结 ====== -->
+    <div class="today-summary" id="todaySummary">
+      <div class="today-summary-header">
+        <span class="today-icon">📋</span>
+        <span class="today-title">今日总结</span>
+        <span class="today-count" id="todayCount"></span>
+      </div>
+      <ul class="today-summary-list" id="todaySummaryList"></ul>
     </div>
 
     <!-- ====== 输入区域 ====== -->
@@ -540,6 +604,9 @@
     const configStatus      = document.getElementById('configStatus');
     const configWarn        = document.getElementById('configWarn');
     const configFileInput   = document.getElementById('configFileInput');
+    const todaySummary      = document.getElementById('todaySummary');
+    const todaySummaryList  = document.getElementById('todaySummaryList');
+    const todayCount        = document.getElementById('todayCount');
 
     // ============================================================
     // 二、数据 & 存储
@@ -620,6 +687,7 @@
         id:          t.id          ?? Date.now(),
         text:        t.text        ?? '',
         completed:   t.completed   ?? false,
+        completedAt: t.completedAt ?? null,
         createdAt:   t.createdAt   ?? formatNow(),
         ddlType:     ddlType,
         ddlDatetime: ddlDatetime,
@@ -951,6 +1019,61 @@
     }
 
     // ============================================================
+    // 5b. 今日总结模块
+    // ============================================================
+    function renderTodaySummary() {
+      const d = new Date();
+      const todayStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      const todayCompleted = todos.filter(t =>
+        t.completed && t.completedAt && t.completedAt.startsWith(todayStr)
+      );
+
+      if (todayCompleted.length === 0) {
+        todaySummary.classList.remove('has-items');
+        return;
+      }
+
+      todayCount.textContent = `(${todayCompleted.length})`;
+      todaySummaryList.innerHTML = todayCompleted.map(t => {
+        const time = t.completedAt.slice(11, 16) || ''; // "14:30"
+        return `
+          <li class="today-summary-item" data-jump-id="${t.id}">
+            <span class="item-check">✓</span>
+            <span>${escapeHTML(t.text)}</span>
+            ${time ? `<span class="item-time">${time}</span>` : ''}
+          </li>`;
+      }).join('');
+
+      todaySummary.classList.add('has-items');
+    }
+
+    // 点击今日总结条目 → 跳转到列表中的对应卡片
+    function jumpToTodoItem(todoId) {
+      // 确保完成分区可见
+      completedSection.style.display = '';
+
+      // 在列表中查找对应卡片
+      const item = document.querySelector(`.todo-item[data-id="${todoId}"]`);
+      if (!item) return;
+
+      // 展开详情面板
+      const details = item.querySelector('.todo-details');
+      const toggle = item.querySelector('.expand-toggle');
+      if (details && details.style.display !== 'block') {
+        details.style.display = 'block';
+        if (toggle) toggle.textContent = '收起 ▴';
+      }
+
+      // 滚动到卡片位置
+      item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // 高亮闪一下
+      item.classList.remove('flash-highlight');
+      void item.offsetWidth;
+      item.classList.add('flash-highlight');
+    }
+
+    // ============================================================
     // 六、增量 DOM 更新（避免重绘导致详情面板折叠）
     // ============================================================
 
@@ -1030,6 +1153,7 @@
         id:            Date.now(),
         text:          text,
         completed:     false,
+        completedAt:   null,
         createdAt:     formatNow(),
         ddlType:       inputDdlType.value,                   // 从输入区读取
         ddlDatetime:   inputDdlDatetime.value || null,       // 从输入区读取
@@ -1062,6 +1186,14 @@
     // 八、事件委托
     // ============================================================
 
+    // ---- 今日总结点击跳转 ----
+    todaySummary.addEventListener('click', (e) => {
+      const item = e.target.closest('.today-summary-item');
+      if (!item) return;
+      const todoId = parseInt(item.dataset.jumpId);
+      if (todoId) jumpToTodoItem(todoId);
+    });
+
     // ---- 8a. 点击事件 ----
     todoListWrapper.addEventListener('click', (e) => {
       const li  = e.target.closest('.todo-item');
@@ -1075,8 +1207,10 @@
       // 切换完成
       if (action === 'toggle') {
         todo.completed = e.target.checked;
+        todo.completedAt = todo.completed ? formatNow() : null;
         saveTodos();
-        renderTodoList();  // 完成状态改变需要重绘（删除线等）
+        renderTodoList();
+        renderTodaySummary();
         return;
       }
 
@@ -1210,6 +1344,7 @@
         todos = todos.filter(t => !t.completed);
         saveTodos();
         renderTodoList();
+        renderTodaySummary();
       }, { once: true });
     }
 
@@ -1236,6 +1371,7 @@
           todos = data.map(migrateTodo);
           saveTodos();
           renderTodoList();
+          renderTodaySummary();
           alert(`成功导入 ${todos.length} 条待办事项！`);
         } catch (err) {
           alert('导入失败：文件格式不正确。');
@@ -1345,6 +1481,7 @@
       await loadConfig();              // config.json（AI 配置）
       await tryAutoLoadJSON();         // 共享 JSON 文件
       renderTodoList();                // 首次渲染
+      renderTodaySummary();           // 今日总结
     }
     init();
 
