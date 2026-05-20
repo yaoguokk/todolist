@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>交互式待办清单</title>
+  <style>
+    /* ============================================================
+       CSS 变量
+       ============================================================ */
+    :root {
+      --bg-start: #0f0c29;
+      --bg-mid: #302b63;
+      --bg-end: #24243e;
+      --glass-bg: rgba(255, 255, 255, 0.07);
+      --glass-border: rgba(255, 255, 255, 0.13);
+      --text-primary: #e8e8ed;
+      --text-muted: rgba(255, 255, 255, 0.45);
+      --accent-purple: #a78bfa;
+      --accent-blue: #60a5fa;
+      --danger: #f87171;
+      --warning: #fbbf24;
+      --input-bg: rgba(255, 255, 255, 0.06);
+    }
+
+    /* ========== 全局重置 ========== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 50px 16px 60px;
+      background: linear-gradient(135deg, var(--bg-start), var(--bg-mid), var(--bg-end));
+      font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: var(--text-primary);
+    }
+
+    /* 背景装饰光晕 */
+    body::before {
+      content: ''; position: fixed; top: -180px; right: -180px;
+      width: 550px; height: 550px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(138, 43, 226, 0.28), transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    body::after {
+      content: ''; position: fixed; bottom: -140px; left: -140px;
+      width: 450px; height: 450px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 191, 255, 0.22), transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ========== 主容器 ========== */
+    .container {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 680px;
+      padding: 34px 30px; border-radius: 24px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 8px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    /* ========== 标题 ========== */
+    h1 {
+      text-align: center; font-size: 26px; font-weight: 650;
+      letter-spacing: 1px; margin-bottom: 4px;
+      background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* 分享提示 & 配置状态 */
+    .top-tips {
+      text-align: center; font-size: 11px; color: var(--text-muted);
+      margin-bottom: 18px; display: flex; align-items: center;
+      justify-content: center; gap: 6px; flex-wrap: wrap;
+    }
+    .config-status {
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    }
+    .config-status.ok    { color: #4ade80; background: rgba(74,222,128,0.1); }
+    .config-status.off   { color: var(--text-muted); background: rgba(255,255,255,0.05); }
+
+    /* 惊叹号 + 悬停气泡提示 */
+    .config-warn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(251,191,36,0.18); color: var(--warning);
+      font-size: 10px; font-weight: 700; cursor: help;
+      position: relative; vertical-align: middle;
+    }
+    .config-warn::after {
+      content: attr(data-tip);
+      position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.9); color: #ddd;
+      padding: 6px 10px; border-radius: 6px; font-size: 11px;
+      font-weight: 400; white-space: nowrap; pointer-events: none;
+      opacity: 0; transition: opacity 0.2s;
+      z-index: 10;
+    }
+    .config-warn:hover::after { opacity: 1; }
+
+    /* AI 总结触发按钮（卡片第三行） */
+    .ai-trigger {
+      border: none; background: none; font-size: 11px;
+      padding: 2px 8px; margin-left: 6px; border-radius: 6px;
+      transition: all 0.25s; font-family: inherit; white-space: nowrap;
+    }
+    .ai-trigger.inactive {
+      color: rgba(255,255,255,0.2); cursor: not-allowed;
+    }
+    .ai-trigger.active {
+      color: var(--accent-purple); cursor: pointer;
+      background: rgba(167,139,250,0.08);
+    }
+    .ai-trigger.active:hover { background: rgba(167,139,250,0.2); }
+
+    /* 备注字数统计 */
+    .notes-char-count {
+      text-align: right; font-size: 10px; color: rgba(255,255,255,0.2);
+      margin-top: 2px;
+    }
+    .notes-char-count.over { color: var(--accent-purple); }
+
+    /* ========== 输入区域 ========== */
+    .input-area {
+      display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;
+    }
+    .input-row {
+      display: flex; gap: 10px;
+    }
+    #todoInput {
+      flex: 1; padding: 13px 16px;
+      border: 1px solid rgba(255,255,255,0.16); border-radius: 13px;
+      font-size: 15px; outline: none;
+      background: var(--input-bg); color: #f0f0f0;
+      transition: border-color 0.3s, box-shadow 0.3s; font-family: inherit;
+    }
+    #todoInput::placeholder { color: rgba(255,255,255,0.3); }
+    #todoInput:focus {
+      border-color: rgba(167,139,250,0.55);
+      box-shadow: 0 0 0 3px rgba(167,139,250,0.12);
+    }
+    #addBtn {
+      padding: 13px 22px; border: none; border-radius: 13px;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      color: #fff; background: linear-gradient(135deg, #7c3aed, #6366f1);
+      transition: transform 0.2s, box-shadow 0.2s; font-family: inherit;
+    }
+    #addBtn:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(124,58,237,0.4); }
+    #addBtn:active { transform: translateY(0); }
+
+    /* 备注输入框（标题下方） */
+    #notesInput {
+      width: 100%; padding: 10px 14px;
+      border: 1px solid rgba(255,255,255,0.12); border-radius: 11px;
+      font-size: 13px; outline: none; resize: vertical;
+      min-height: 38px; max-height: 80px;
+      background: var(--input-bg); color: #e0e0e0;
+      transition: border-color 0.3s; font-family: inherit;
+    }
+    #notesInput::placeholder { color: rgba(255,255,255,0.25); font-size: 12px; }
+    #notesInput:focus { border-color: rgba(167,139,250,0.4); }
+
+    /* DDL 行（输入区域） */
+    .input-ddl-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .input-ddl-row > label {
+      font-size: 12px; color: var(--text-muted); flex-shrink: 0;
+    }
+    .input-ddl-row select {
+      padding: 6px 10px; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; font-size: 13px; outline: none; cursor: pointer;
+      background: var(--input-bg); color: #e0e0e0; font-family: inherit;
+    }
+    .input-ddl-row select:focus { border-color: rgba(167,139,250,0.4); }
+    #inputDdlDatetime {
+      padding: 6px 10px; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; font-size: 13px; outline: none;
+      background: var(--input-bg); color: #e0e0e0;
+      color-scheme: dark; font-family: inherit;
+    }
+    #inputDdlDatetime:focus { border-color: rgba(167,139,250,0.4); }
+
+    /* ========== 待办列表容器 ========== */
+    #todoListWrapper {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    /* 分区标题 */
+    .section-title {
+      font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.35);
+      margin-bottom: 6px; padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .section-count {
+      font-weight: 700; color: var(--accent-purple); margin-left: 4px;
+    }
+
+    /* 列表 */
+    .todo-list {
+      list-style: none;
+    }
+    /* ---------- 单个事项卡片 ---------- */
+    .todo-item {
+      display: flex; flex-direction: column;
+      padding: 13px 15px 10px; margin-bottom: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.07); border-radius: 15px;
+      backdrop-filter: blur(8px); transition: background 0.3s;
+    }
+    .todo-item:hover { background: rgba(255,255,255,0.09); }
+    .todo-item.completed { opacity: 0.6; }
+
+    /* ---- 第一行：复选框 + 标题 + 删除 ---- */
+    .todo-main-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .todo-main-row input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 21px; height: 21px; flex-shrink: 0;
+      border: 2px solid rgba(255,255,255,0.32); border-radius: 6px;
+      cursor: pointer; display: grid; place-content: center; transition: all 0.25s;
+    }
+    .todo-main-row input[type="checkbox"]:hover { border-color: var(--accent-purple); }
+    .todo-main-row input[type="checkbox"]::before {
+      content: ''; width: 11px; height: 11px; border-radius: 3px;
+      transform: scale(0); transition: transform 0.2s; background: var(--accent-purple);
+      clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    }
+    .todo-main-row input[type="checkbox"]:checked::before { transform: scale(1); }
+    .todo-main-row input[type="checkbox"]:checked {
+      border-color: var(--accent-purple); background: rgba(167,139,250,0.18);
+    }
+    .todo-text {
+      flex: 1; font-size: 15px; word-break: break-word; transition: all 0.3s;
+    }
+    .todo-item.completed .todo-text { text-decoration: line-through; opacity: 0.5; }
+    .delete-btn {
+      flex-shrink: 0; width: 32px; height: 32px; border: none;
+      border-radius: 8px; cursor: pointer; font-size: 16px;
+      background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.45);
+      transition: all 0.25s; display: flex; align-items: center;
+      justify-content: center; font-family: inherit;
+    }
+    .delete-btn:hover { background: rgba(239,68,68,0.25); color: var(--danger); }
+
+    /* ---- 第二行：生成时间 + 截止时间 + 倒计时 ---- */
+    .todo-meta-row {
+      display: flex; flex-wrap: wrap; align-items: center;
+      gap: 4px 12px; padding: 5px 0 2px 31px;
+      font-size: 12px; color: var(--text-muted);
+    }
+    .todo-timestamp { opacity: 0.65; }
+    .todo-ddl { color: rgba(255,255,255,0.5); }
+
+    /* 倒计时徽章 */
+    .todo-countdown {
+      font-weight: 600; font-size: 11px;
+      padding: 1px 8px; border-radius: 20px;
+      background: rgba(255,255,255,0.06); white-space: nowrap;
+    }
+    .todo-countdown.countdown-normal  { color: var(--accent-blue); }
+    .todo-countdown.countdown-warning { color: var(--warning); background: rgba(251,191,36,0.1); }
+    .todo-countdown.countdown-urgent  { color: var(--danger); background: rgba(248,113,113,0.12); animation: pulse 1.5s ease-in-out infinite; }
+    .todo-countdown.countdown-expired { color: rgba(248,113,113,0.5); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.55; }
+    }
+
+    /* ---- 第三行：备注概述 ---- */
+    .todo-summary-row {
+      display: none; /* 默认隐藏，有备注时才显示 */
+      margin: 6px 0 2px 31px; padding: 7px 12px;
+      font-size: 12px; color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.03); border-radius: 8px;
+      border-left: 2px solid rgba(255,255,255,0.08);
+      line-height: 1.5; position: relative;
+    }
+    .todo-summary-row.has-notes { display: block; }
+    .summary-text { word-break: break-word; }
+
+    /* AI 标签 */
+    .summary-ai-badge {
+      display: inline-block; padding: 1px 6px; font-size: 9px; font-weight: 700;
+      background: linear-gradient(135deg, #7c3aed, #6366f1); color: #fff;
+      border-radius: 4px; margin-right: 4px; vertical-align: middle; line-height: 1.5;
+    }
+    /* 展开原文按钮 */
+    .summary-expand-btn {
+      background: none; border: none; color: var(--accent-blue);
+      cursor: pointer; font-size: 11px; margin-left: 4px; padding: 0;
+      font-family: inherit;
+    }
+    .summary-expand-btn:hover { text-decoration: underline; }
+    /* 原文展开区 */
+    .summary-full-text {
+      display: none; margin-top: 4px; padding-top: 4px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.4); font-size: 12px; word-break: break-word;
+    }
+    .summary-full-text.open { display: block; }
+
+    /* AI 加载中占位 */
+    .summary-loading {
+      color: rgba(255,255,255,0.3); font-style: italic;
+    }
+
+    /* ---- 展开详情按钮 ---- */
+    .expand-toggle {
+      align-self: flex-start; margin: 4px 0 0 31px;
+      padding: 4px 10px; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; cursor: pointer; font-size: 11px;
+      background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.5);
+      transition: all 0.2s; font-family: inherit;
+    }
+    .expand-toggle:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+
+    /* ---- 详情面板 ---- */
+    .todo-details {
+      display: none; margin: 8px 0 2px 31px;
+      padding: 14px 16px; background: rgba(0,0,0,0.2);
+      border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);
+    }
+    .field-group {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .field-group > label {
+      font-size: 12px; color: var(--text-muted); min-width: 52px; flex-shrink: 0;
+    }
+    .todo-details select,
+    .todo-details input[type="text"],
+    .todo-details input[type="datetime-local"],
+    .todo-details textarea {
+      padding: 7px 10px; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; font-size: 13px; outline: none;
+      background: rgba(255,255,255,0.07); color: #e0e0e0;
+      transition: border-color 0.25s; font-family: inherit;
+    }
+    .todo-details select:focus,
+    .todo-details input:focus,
+    .todo-details textarea:focus { border-color: rgba(167,139,250,0.5); }
+
+    /* datetime-local 暗色日历选择器 */
+    .todo-details input[type="datetime-local"] {
+      color-scheme: dark;
+    }
+    .todo-details textarea { width: 100%; resize: vertical; min-height: 52px; }
+
+    /* 属性行 */
+    .attr-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .attr-row input { flex: 1; min-width: 100px; }
+
+    /* ========== 淡入/淡出动画 ========== */
+    .todo-item.fade-in  { animation: fadeIn 0.4s ease-out; }
+    .todo-item.fade-out { animation: fadeOut 0.3s ease-in forwards; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: scale(1); }
+      to   { opacity: 0; transform: scale(0.9); }
+    }
+
+    /* ========== 底部操作栏 ========== */
+    .footer {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 18px; padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      flex-wrap: wrap; gap: 8px;
+    }
+    #countDisplay {
+      font-size: 13px; color: rgba(255,255,255,0.5); font-weight: 500;
+    }
+    #countDisplay span { color: var(--accent-purple); font-weight: 700; font-size: 15px; }
+
+    .footer-btns { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+    /* AI 开关 */
+    .ai-toggle-label {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--text-muted); cursor: pointer;
+      user-select: none; white-space: nowrap;
+    }
+    .ai-toggle-label input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 34px; height: 20px; border-radius: 10px;
+      background: rgba(255,255,255,0.15); cursor: pointer;
+      position: relative; transition: background 0.3s; flex-shrink: 0;
+    }
+    .ai-toggle-label input[type="checkbox"]::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; transition: left 0.25s;
+    }
+    .ai-toggle-label input[type="checkbox"]:checked {
+      background: var(--accent-purple);
+    }
+    .ai-toggle-label input[type="checkbox"]:checked::after { left: 16px; }
+
+    /* 底部按钮 */
+    .footer-btns > button {
+      padding: 8px 14px; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer;
+      color: rgba(255,255,255,0.6); background: rgba(255,255,255,0.04);
+      transition: all 0.25s; font-family: inherit; white-space: nowrap;
+    }
+    .footer-btns > button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .footer-btns button.clear-btn:hover {
+      background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.4); color: var(--danger);
+    }
+    .footer-btns button.io-btn:hover {
+      background: rgba(167,139,250,0.18); border-color: rgba(167,139,250,0.35); color: var(--accent-purple);
+    }
+
+    #importFileInput { display: none; }
+
+    /* 空状态提示 */
+    .empty-hint {
+      text-align: center; padding: 44px 0;
+      color: rgba(255,255,255,0.2); font-size: 14px; user-select: none;
+    }
+
+    /* ========== 响应式 ========== */
+    @media (max-width: 520px) {
+      body { padding-top: 24px; }
+      .container { width: 96%; padding: 20px 12px; border-radius: 18px; }
+      h1 { font-size: 21px; }
+      .input-row { flex-direction: column; }
+      .todo-meta-row, .todo-summary-row, .expand-toggle, .todo-details { margin-left: 0; }
+      .attr-row { flex-direction: column; }
+      .footer { flex-direction: column; align-items: stretch; text-align: center; }
+      .footer-btns { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>我的待办清单</h1>
+
+    <!-- 顶部提示 + 配置状态 -->
+    <div class="top-tips">
+      <span class="config-status off" id="configStatus"></span>
+      <span class="config-warn" id="configWarn" style="display:none;" data-tip="">!</span>
+    </div>
+
+    <!-- ====== 输入区域 ====== -->
+    <div class="input-area">
+      <div class="input-row">
+        <input type="text" id="todoInput" placeholder="输入要做的事情…" maxlength="200" />
+        <button id="addBtn">＋ 添加</button>
+      </div>
+      <!-- 备注输入：标题下方始终可见 -->
+      <textarea id="notesInput" placeholder="备注（可选）" rows="2"></textarea>
+      <!-- DDL 设置：创建时即可填写 -->
+      <div class="input-ddl-row">
+        <label>DDL</label>
+        <select id="inputDdlType">
+          <option value="long-term" selected>长期</option>
+          <option value="datetime">指定时间</option>
+        </select>
+        <input type="datetime-local" id="inputDdlDatetime" style="display:none;">
+      </div>
+    </div>
+
+    <!-- ====== 待办列表 ====== -->
+    <div id="todoListWrapper">
+      <div class="list-section" id="incompleteSection">
+        <h3 class="section-title">待完成<span class="section-count" id="incompleteCount"></span></h3>
+        <ul class="todo-list" id="incompleteList"></ul>
+      </div>
+      <div class="list-section" id="completedSection" style="display:none;">
+        <h3 class="section-title">已完成<span class="section-count" id="completedCount"></span></h3>
+        <ul class="todo-list" id="completedList"></ul>
+      </div>
+      <p class="empty-hint" id="emptyHint">还没有待办事项，去添加一个吧</p>
+    </div>
+
+    <!-- ====== 底部操作栏 ====== -->
+    <div class="footer">
+      <p id="countDisplay">还有 <span id="countNumber">0</span> 件事没做</p>
+      <div class="footer-btns">
+        <!-- AI 总结开关（由 JS 控制显示/隐藏） -->
+        <label class="ai-toggle-label" id="aiToggleLabel" style="display:none;">
+          <input type="checkbox" id="aiToggle" checked>
+          AI 总结
+        </label>
+        <button class="io-btn" id="exportBtn">导出数据</button>
+        <button class="io-btn" id="importBtn">导入数据</button>
+        <button class="clear-btn" id="clearCompletedBtn">清除已完成</button>
+      </div>
+    </div>
+    <input type="file" id="importFileInput" accept=".json" />
+    <input type="file" id="configFileInput" accept=".json" style="display:none;" />
+  </div>
+
+  <!-- ==================== JavaScript ==================== -->
+  <script>
+    // ============================================================
+    // 一、DOM 元素引用
+    // ============================================================
+    const todoInput         = document.getElementById('todoInput');
+    const notesInput        = document.getElementById('notesInput');
+    const inputDdlType      = document.getElementById('inputDdlType');
+    const inputDdlDatetime  = document.getElementById('inputDdlDatetime');
+    const addBtn            = document.getElementById('addBtn');
+    const todoListWrapper   = document.getElementById('todoListWrapper');
+    const incompleteList    = document.getElementById('incompleteList');
+    const completedList     = document.getElementById('completedList');
+    const incompleteSection = document.getElementById('incompleteSection');
+    const completedSection  = document.getElementById('completedSection');
+    const incompleteCount   = document.getElementById('incompleteCount');
+    const completedCount    = document.getElementById('completedCount');
+    const countNumber       = document.getElementById('countNumber');
+    const clearCompletedBtn = document.getElementById('clearCompletedBtn');
+    const emptyHint         = document.getElementById('emptyHint');
+    const exportBtn         = document.getElementById('exportBtn');
+    const importBtn         = document.getElementById('importBtn');
+    const importFileInput   = document.getElementById('importFileInput');
+    const aiToggle          = document.getElementById('aiToggle');
+    const aiToggleLabel     = document.getElementById('aiToggleLabel');
+    const configStatus      = document.getElementById('configStatus');
+    const configWarn        = document.getElementById('configWarn');
+    const configFileInput   = document.getElementById('configFileInput');
+
+    // ============================================================
+    // 二、数据 & 存储
+    //   数据结构（v2.1）：
+    //   {
+    //     id, text, completed, createdAt,          // 基础字段
+    //     ddlType: "long-term" | "datetime",       // DDL 类型
+    //     ddlDatetime: "2026-05-25T14:30" | null,  // 具体截止时间（ISO）
+    //     notes: "",                                // 备注原文
+    //     notesSummary: "",                         // AI 一句话总结（>120字时缓存）
+    //     assignee, department, responsible         // 任务属性
+    //   }
+    // ============================================================
+    const STORAGE_KEY = 'my_todo_list_v2_1';
+    const SUMMARY_CHAR_THRESHOLD = 120;  // 备注超过 120 字符触发 AI 总结
+    let todos = [];
+
+    // ---- 工具：生成当前时间字符串 ----
+    function formatNow() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    // ---- 工具：HTML 转义 ----
+    function escapeHTML(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // ---- 工具：ISO datetime-local 字符串转显示格式 ----
+    function formatDatetime(isoStr) {
+      if (!isoStr) return '';
+      // isoStr 格式："2026-05-25T14:30"
+      const [date, time] = isoStr.split('T');
+      const [, month, day] = date.split('-');
+      return `${month}-${day} ${time}`;
+    }
+
+    // ---- localStorage 读写 ----
+    function saveTodos() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+    }
+
+    function loadTodos() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { todos = []; return; }
+      try {
+        todos = JSON.parse(raw).map(migrateTodo);
+      } catch (e) {
+        todos = [];
+      }
+    }
+
+    // ---- 数据迁移：兼容旧版字段 ----
+    function migrateTodo(t) {
+      let ddlType     = t.ddlType ?? 'long-term';
+      let ddlDatetime = t.ddlDatetime ?? null;
+
+      // 旧版 "weekly" 格式 → 转为下一个匹配的日期时间
+      if (ddlType === 'weekly' && !ddlDatetime) {
+        const day  = t.ddlDay ?? 1;
+        const hour = t.ddlHour ?? 9;
+        const min  = t.ddlMinute ?? 0;
+        const now  = new Date();
+        const jsDay = day === 7 ? 0 : day;  // 1(周一)~7(周日) → 0(周日)~6(周六)
+        const target = new Date(now);
+        target.setHours(hour, min, 0, 0);
+        let daysUntil = jsDay - now.getDay();
+        if (daysUntil < 0 || (daysUntil === 0 && now >= target)) daysUntil += 7;
+        target.setDate(target.getDate() + daysUntil);
+        ddlType     = 'datetime';
+        ddlDatetime = target.toISOString().slice(0, 16);  // "2026-05-25T14:30"
+      }
+
+      return {
+        id:          t.id          ?? Date.now(),
+        text:        t.text        ?? '',
+        completed:   t.completed   ?? false,
+        createdAt:   t.createdAt   ?? formatNow(),
+        ddlType:     ddlType,
+        ddlDatetime: ddlDatetime,
+        notes:       t.notes       ?? '',
+        notesSummary: t.notesSummary ?? '',
+        assignee:    t.assignee    ?? '',
+        department:  t.department  ?? '',
+        responsible: t.responsible ?? ''
+      };
+    }
+
+    // ============================================================
+    // 三、AI 配置 & DeepSeek API
+    // ============================================================
+    let aiConfig = { apiKey: null, fileEnabled: true };  // 从 config.json 读取
+    let aiToggleEnabled = true;  // 页面开关状态
+
+    // ---- 加载 config.json ----
+    async function loadConfig() {
+      aiConfig._fileLoaded = false;
+      aiConfig._fileProtocol = (window.location.protocol === 'file:');
+      try {
+        const resp = await fetch('./config.json');
+        if (resp.ok) {
+          const cfg = await resp.json();
+          aiConfig._fileLoaded = true;  // 标记：文件存在且可读
+          aiConfig.apiKey      = cfg.deepseekApiKey || null;
+          aiConfig.fileEnabled = cfg.enableSummary !== false;
+        }
+      } catch (e) {
+        // fetch 失败（file:// 协议或网络错误）
+      }
+
+      // 读取用户开关偏好
+      const saved = localStorage.getItem('ai_toggle_enabled');
+      if (saved !== null) aiToggleEnabled = (saved === 'true');
+
+      updateConfigUI();
+    }
+
+    function isSummaryAvailable() {
+      return aiConfig.apiKey && aiConfig.fileEnabled && aiToggleEnabled;
+    }
+
+    // ---- 更新配置相关 UI ----
+    function updateConfigUI() {
+      const hasKey = !!aiConfig.apiKey;
+      let statusText, statusClass, warnTip = '';
+
+      if (hasKey && aiConfig.fileEnabled && aiToggleEnabled) {
+        // 全部就绪
+        statusText  = 'AI 已配置';
+        statusClass = 'config-status ok';
+        // 不显示惊叹号
+      } else if (!aiConfig._fileLoaded && aiConfig._fileProtocol) {
+        statusText  = 'AI 未配置';
+        statusClass = 'config-status off';
+        warnTip     = '当前为 file:// 协议无法自动读取 config.json，请点击此处手动加载';
+      } else if (!aiConfig._fileLoaded) {
+        statusText  = 'AI 未配置';
+        statusClass = 'config-status off';
+        warnTip     = '未找到 config.json 文件，请创建配置文件';
+      } else if (!hasKey) {
+        statusText  = 'AI 未配置';
+        statusClass = 'config-status off';
+        warnTip     = 'config.json 中未找到 deepseekApiKey';
+      } else if (!aiConfig.fileEnabled) {
+        statusText  = 'AI 已关闭';
+        statusClass = 'config-status off';
+        warnTip     = 'config.json 中 enableSummary 为 false';
+      } else if (!aiToggleEnabled) {
+        statusText  = 'AI 已关闭';
+        statusClass = 'config-status off';
+        warnTip     = '页面底部 AI 总结开关已关闭';
+      } else {
+        statusText  = 'AI 未配置';
+        statusClass = 'config-status off';
+        warnTip     = 'AI 功能不可用，请检查配置';
+      }
+
+      configStatus.textContent = statusText;
+      configStatus.className   = statusClass;
+
+      // 惊叹号：仅在 AI 不完全可用时显示
+      if (warnTip) {
+        configWarn.style.display = 'inline-flex';
+        configWarn.dataset.tip   = warnTip;
+        // file:// 协议时可点击手动加载
+        const canClick = aiConfig._fileProtocol && !aiConfig._fileLoaded;
+        configWarn.style.cursor = canClick ? 'pointer' : 'help';
+        configStatus.style.cursor = canClick ? 'pointer' : 'default';
+      } else {
+        configWarn.style.display = 'none';
+        configStatus.style.cursor = 'default';
+      }
+
+      // AI 开关：只有 config.json 加载成功且有 Key 时才显示
+      aiToggleLabel.style.display = (aiConfig._fileLoaded && hasKey) ? 'flex' : 'none';
+      aiToggle.checked = aiToggleEnabled;
+    }
+
+    // ---- 调用 DeepSeek API 总结备注 ----
+    async function summarizeNotes(notes) {
+      if (!isSummaryAvailable()) return null;
+      if (!notes || notes.length <= SUMMARY_CHAR_THRESHOLD) return null;
+
+      try {
+        const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${aiConfig.apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'deepseek-v4-flash',
+            messages: [
+              { role: 'system', content: '你是一个任务概述助手。用不超过25个汉字总结用户提供的任务备注，必须保留任务主题和关键要求，去掉废话。只输出总结句子，不要加任何前缀或解释。' },
+              { role: 'user', content: notes }
+            ],
+            max_tokens: 60,
+            temperature: 0.3
+          })
+        });
+
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        const summary = data.choices?.[0]?.message?.content?.trim();
+        return summary || null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // ---- 为单个 todo 触发 AI 总结（异步，完成后局部更新 DOM） ----
+    async function triggerSummary(todo) {
+      if (!isSummaryAvailable()) return;
+      if (!todo.notes || todo.notes.length <= SUMMARY_CHAR_THRESHOLD) return;
+      if (todo.notesSummary) return; // 已有缓存
+
+      const li = document.querySelector(`.todo-item[data-id="${todo.id}"]`);
+      if (li) {
+        const summaryRow = li.querySelector('.todo-summary-row');
+        const summaryText = summaryRow?.querySelector('.summary-text');
+        if (summaryText) summaryText.innerHTML = '<span class="summary-loading">AI 总结中…</span>';
+      }
+
+      const summary = await summarizeNotes(todo.notes);
+      todo.notesSummary = summary || '';  // 失败时为空字符串
+      saveTodos();
+
+      // 局部刷新该卡片的第三行
+      if (li) updateTodoItemSummaryRow(li, todo);
+    }
+
+    // ============================================================
+    // 四、倒计时计算
+    // ============================================================
+    function getDeadline(todo) {
+      if (todo.ddlType !== 'datetime' || !todo.ddlDatetime) return null;
+      return new Date(todo.ddlDatetime);
+    }
+
+    function getCountdownText(todo) {
+      const deadline = getDeadline(todo);
+      if (!deadline) return '长期';
+
+      const diff = deadline - new Date();
+      if (diff <= 0) return '已过期';
+
+      const minutesTotal = Math.floor(diff / 60000);
+      const days    = Math.floor(minutesTotal / 1440);
+      const hours   = Math.floor((minutesTotal % 1440) / 60);
+      const minutes = minutesTotal % 60;
+
+      let text = '';
+      if (days > 0)    text += `${days}天`;
+      if (hours > 0)   text += `${hours}小时`;
+      if (minutes > 0 || text === '') text += `${minutes}分钟`;
+      return text;
+    }
+
+    function getUrgencyClass(todo) {
+      const deadline = getDeadline(todo);
+      if (!deadline) return 'countdown-normal';
+      const diff = deadline - new Date();
+      if (diff <= 0)                    return 'countdown-expired';
+      if (diff < 60 * 60 * 1000)       return 'countdown-urgent';
+      if (diff < 24 * 60 * 60 * 1000)  return 'countdown-warning';
+      return 'countdown-normal';
+    }
+
+    // ============================================================
+    // 五、渲染函数
+    // ============================================================
+    function renderTodoList(animateNewItemId = null) {
+      let incompleteHTML = '';
+      let completedHTML = '';
+      let activeCount = 0;
+      let doneCount = 0;
+
+      todos.forEach(todo => {
+        if (!todo.completed) activeCount++; else doneCount++;
+
+        const ddlDisplay = todo.ddlType === 'datetime' && todo.ddlDatetime
+          ? '截止 ' + formatDatetime(todo.ddlDatetime)
+          : '长期';
+        const countdownText = getCountdownText(todo);
+        const urgencyClass  = getUrgencyClass(todo);
+        const isCompleted   = todo.completed ? ' completed' : '';
+        const fadeIn        = todo.id === animateNewItemId ? ' fade-in' : '';
+
+        // 第三行：备注概述
+        let summaryHTML = '';
+        const hasNotes = todo.notes && todo.notes.trim().length > 0;
+        if (hasNotes) {
+          const notesLen  = todo.notes.trim().length;
+          const isLong    = notesLen > SUMMARY_CHAR_THRESHOLD;
+
+          if (isLong && todo.notesSummary) {
+            summaryHTML = `
+              <span class="summary-ai-badge">AI</span>
+              <span class="summary-text">${escapeHTML(todo.notesSummary)}</span>
+              <button class="summary-expand-btn" data-action="expandNotes">展开原文 ▾</button>
+              <div class="summary-full-text">${escapeHTML(todo.notes)}</div>`;
+          } else if (isLong && !todo.notesSummary) {
+            const preview = escapeHTML(todo.notes.trim().slice(0, 80));
+            const canAI = isSummaryAvailable();
+            summaryHTML = `
+              <span class="summary-text">${preview}…</span>
+              <button class="ai-trigger ${canAI ? 'active' : 'inactive'}"
+                      data-action="triggerSummary"
+                      ${canAI ? '' : 'disabled'}
+                      title="${canAI ? '点击用 AI 总结此备注' : 'AI 总结功能未启用'}">✨ 总结</button>`;
+          } else {
+            summaryHTML = `<span class="summary-text">${escapeHTML(todo.notes)}</span>`;
+          }
+        }
+
+        const itemHTML = `
+          <li class="todo-item${isCompleted}${fadeIn}" data-id="${todo.id}">
+
+            <!-- 第一行：复选框 + 标题 + 删除 -->
+            <div class="todo-main-row">
+              <input type="checkbox" data-action="toggle" ${todo.completed ? 'checked' : ''}>
+              <span class="todo-text">${escapeHTML(todo.text)}</span>
+              <button class="delete-btn" data-action="delete" title="删除事项">&#10005;</button>
+            </div>
+
+            <!-- 第二行：生成时间 + 截止时间 + 倒计时 -->
+            <div class="todo-meta-row">
+              <span class="todo-timestamp">生成 ${escapeHTML(todo.createdAt)}</span>
+              <span class="todo-ddl">${ddlDisplay}</span>
+              <span class="todo-countdown ${urgencyClass}" data-countdown-id="${todo.id}">${escapeHTML(countdownText)}</span>
+            </div>
+
+            <!-- 第三行：备注概述（有备注才显示） -->
+            <div class="todo-summary-row${hasNotes ? ' has-notes' : ''}" data-summary-id="${todo.id}">
+              ${summaryHTML}
+            </div>
+
+            <!-- 展开详情 -->
+            <button class="expand-toggle" data-action="expand">详情 ▾</button>
+
+            <!-- 详情面板 -->
+            <div class="todo-details">
+              <!-- DDL 设置 -->
+              <div class="field-group">
+                <label>DDL设置</label>
+                <select data-field="ddlType">
+                  <option value="long-term" ${todo.ddlType === 'long-term' ? 'selected' : ''}>长期</option>
+                  <option value="datetime"  ${todo.ddlType === 'datetime'  ? 'selected' : ''}>指定时间</option>
+                </select>
+                <input type="datetime-local" data-field="ddlDatetime"
+                       value="${escapeHTML(todo.ddlDatetime || '')}"
+                       style="${todo.ddlType !== 'datetime' ? 'display:none' : ''}">
+              </div>
+
+              <!-- 备注编辑 -->
+              <div class="field-group">
+                <label>备注</label>
+                <textarea data-field="notes" placeholder="添加备注信息…">${escapeHTML(todo.notes || '')}</textarea>
+              </div>
+
+              <!-- 属性 -->
+              <div class="attr-row">
+                <input type="text" data-field="assignee"    placeholder="任务分配人" value="${escapeHTML(todo.assignee || '')}">
+                <input type="text" data-field="department"  placeholder="责任部门"   value="${escapeHTML(todo.department || '')}">
+                <input type="text" data-field="responsible"  placeholder="责任人"     value="${escapeHTML(todo.responsible || '')}">
+              </div>
+            </div>
+          </li>`;
+
+        if (todo.completed) {
+          completedHTML += itemHTML;
+        } else {
+          incompleteHTML += itemHTML;
+        }
+      });
+
+      incompleteList.innerHTML = incompleteHTML;
+      completedList.innerHTML = completedHTML;
+
+      // 分区显示/隐藏
+      incompleteSection.style.display = activeCount === 0 && doneCount === 0 ? '' : '';
+      completedSection.style.display = doneCount > 0 ? '' : 'none';
+      incompleteCount.textContent = activeCount > 0 ? `(${activeCount})` : '';
+      completedCount.textContent = doneCount > 0 ? `(${doneCount})` : '';
+
+      // 绑定 datetime-local 的 change 监听（两个列表都要）
+      todoListWrapper.querySelectorAll('[data-field="ddlDatetime"]').forEach(input => {
+        input.addEventListener('change', function() {
+          const itemLi = this.closest('.todo-item');
+          if (!itemLi) return;
+          const todoId = parseInt(itemLi.dataset.id);
+          const targetTodo = todos.find(t => t.id === todoId);
+          if (!targetTodo) return;
+          targetTodo.ddlDatetime = this.value || null;
+          saveTodos();
+          updateTodoItemMeta(itemLi, targetTodo);
+        });
+      });
+
+      countNumber.textContent = activeCount;
+      emptyHint.style.display = todos.length === 0 ? 'block' : 'none';
+
+      const hasCompleted = todos.some(t => t.completed);
+      clearCompletedBtn.style.opacity    = hasCompleted ? '1' : '0.4';
+      clearCompletedBtn.style.pointerEvents = hasCompleted ? 'auto' : 'none';
+    }
+
+    // ============================================================
+    // 六、增量 DOM 更新（避免重绘导致详情面板折叠）
+    // ============================================================
+
+    // ---- 6a. 更新单个卡片的第二行（DDL + 倒计时） ----
+    function updateTodoItemMeta(li, todo) {
+      const ddlEl = li.querySelector('.todo-ddl');
+      const cdEl  = li.querySelector('.todo-countdown');
+      if (ddlEl) {
+        ddlEl.textContent = todo.ddlType === 'datetime' && todo.ddlDatetime
+          ? '截止 ' + formatDatetime(todo.ddlDatetime)
+          : '长期';
+      }
+      if (cdEl) {
+        cdEl.textContent = getCountdownText(todo);
+        cdEl.className   = 'todo-countdown ' + getUrgencyClass(todo);
+      }
+    }
+
+    // ---- 6b. 更新单个卡片的第三行（备注概述） ----
+    function updateTodoItemSummaryRow(li, todo) {
+      const row = li.querySelector('.todo-summary-row');
+      if (!row) return;
+
+      const hasNotes = todo.notes && todo.notes.trim().length > 0;
+      row.classList.toggle('has-notes', hasNotes);
+
+      if (!hasNotes) {
+        row.innerHTML = '';
+        return;
+      }
+
+      const notesLen = todo.notes.trim().length;
+      const isLong   = notesLen > SUMMARY_CHAR_THRESHOLD;
+
+      if (isLong && todo.notesSummary) {
+        row.innerHTML = `
+          <span class="summary-ai-badge">AI</span>
+          <span class="summary-text">${escapeHTML(todo.notesSummary)}</span>
+          <button class="summary-expand-btn" data-action="expandNotes">展开原文 ▾</button>
+          <div class="summary-full-text">${escapeHTML(todo.notes)}</div>`;
+      } else if (isLong && !todo.notesSummary) {
+        const preview = escapeHTML(todo.notes.trim().slice(0, 80));
+        const canAI = isSummaryAvailable();
+        row.innerHTML = `
+          <span class="summary-text">${preview}…</span>
+          <button class="ai-trigger ${canAI ? 'active' : 'inactive'}"
+                  data-action="triggerSummary"
+                  ${canAI ? '' : 'disabled'}
+                  title="${canAI ? '点击用 AI 总结此备注' : 'AI 总结功能未启用'}">✨ 总结</button>`;
+      } else {
+        row.innerHTML = `<span class="summary-text">${escapeHTML(todo.notes)}</span>`;
+      }
+    }
+
+    // ---- 6c. 全局倒计时更新（每分钟） ----
+    function updateAllCountdowns() {
+      document.querySelectorAll('.todo-countdown').forEach(el => {
+        const todoId = parseInt(el.dataset.countdownId);
+        const todo = todos.find(t => t.id === todoId);
+        if (!todo) return;
+        el.textContent = getCountdownText(todo);
+        el.className = 'todo-countdown ' + getUrgencyClass(todo);
+      });
+    }
+    let countdownTimer = setInterval(updateAllCountdowns, 60000);
+
+    // ============================================================
+    // 七、添加新事项
+    // ============================================================
+    function addTodo() {
+      const text  = todoInput.value.trim();
+      if (text === '') { todoInput.focus(); return; }
+
+      const notes = notesInput.value.trim();
+
+      const newTodo = {
+        id:            Date.now(),
+        text:          text,
+        completed:     false,
+        createdAt:     formatNow(),
+        ddlType:       inputDdlType.value,                   // 从输入区读取
+        ddlDatetime:   inputDdlDatetime.value || null,       // 从输入区读取
+        notes:         notes,
+        notesSummary:  '',
+        assignee:      '',
+        department:    '',
+        responsible:   ''
+      };
+
+      todos.unshift(newTodo);
+      saveTodos();
+      renderTodoList(newTodo.id);
+
+      // 新建事项备注超过阈值时自动触发 AI 总结
+      if (notes.length > SUMMARY_CHAR_THRESHOLD && isSummaryAvailable()) {
+        triggerSummary(newTodo);
+      }
+
+      // 重置输入区
+      todoInput.value  = '';
+      notesInput.value = '';
+      inputDdlType.value = 'long-term';
+      inputDdlDatetime.value = '';
+      inputDdlDatetime.style.display = 'none';
+      todoInput.focus();
+    }
+
+    // ============================================================
+    // 八、事件委托
+    // ============================================================
+
+    // ---- 8a. 点击事件 ----
+    todoListWrapper.addEventListener('click', (e) => {
+      const li  = e.target.closest('.todo-item');
+      if (!li) return;
+      const id  = parseInt(li.dataset.id);
+      const todo = todos.find(t => t.id === id);
+      if (!todo) return;
+
+      const action = e.target.dataset.action;
+
+      // 切换完成
+      if (action === 'toggle') {
+        todo.completed = e.target.checked;
+        saveTodos();
+        renderTodoList();  // 完成状态改变需要重绘（删除线等）
+        return;
+      }
+
+      // 删除
+      if (action === 'delete') {
+        li.classList.add('fade-out');
+        li.addEventListener('animationend', () => {
+          todos = todos.filter(t => t.id !== id);
+          saveTodos();
+          renderTodoList();
+        }, { once: true });
+        return;
+      }
+
+      // 展开/收起详情
+      if (action === 'expand') {
+        const details = li.querySelector('.todo-details');
+        const isOpen  = details.style.display === 'block';
+        details.style.display = isOpen ? 'none' : 'block';
+        e.target.textContent  = isOpen ? '详情 ▾' : '收起 ▴';
+        return;
+      }
+
+      // 展开/收起原文（第三行）
+      if (action === 'expandNotes') {
+        const fullText = li.querySelector('.summary-full-text');
+        if (!fullText) return;
+        const isOpen = fullText.classList.toggle('open');
+        e.target.textContent = isOpen ? '收起 ▲' : '展开原文 ▾';
+        return;
+      }
+
+      // 触发 AI 总结
+      if (action === 'triggerSummary') {
+        if (!isSummaryAvailable()) return;
+        const btn = e.target;
+        btn.textContent = '总结中…';
+        btn.disabled = true;
+        triggerSummary(todo);
+        return;
+      }
+    });
+
+    // ---- 8b. 修改事件（详情面板中的表单控件） ----
+    todoListWrapper.addEventListener('change', (e) => {
+      const li  = e.target.closest('.todo-item');
+      if (!li) return;
+      const id  = parseInt(li.dataset.id);
+      const todo = todos.find(t => t.id === id);
+      if (!todo) return;
+
+      const field = e.target.dataset.field;
+      if (!field) return;
+
+      switch (field) {
+        case 'ddlType':
+          todo.ddlType = e.target.value;
+          if (todo.ddlType === 'long-term') todo.ddlDatetime = null;
+          // 切换 datetime-local 输入框的显示/隐藏
+          const dtInput = li.querySelector('[data-field="ddlDatetime"]');
+          if (dtInput) dtInput.style.display = todo.ddlType === 'datetime' ? '' : 'none';
+          break;
+        case 'ddlDatetime':
+          todo.ddlDatetime = e.target.value || null;
+          break;
+        case 'notes': {
+          const oldNotes = todo.notes;
+          todo.notes = e.target.value;
+          // 备注内容变化 → 清除旧总结缓存，触发新总结
+          if (todo.notes.trim() !== (oldNotes || '').trim()) {
+            todo.notesSummary = '';
+          }
+          break;
+        }
+        case 'assignee':
+          todo.assignee = e.target.value;
+          break;
+        case 'department':
+          todo.department = e.target.value;
+          break;
+        case 'responsible':
+          todo.responsible = e.target.value;
+          break;
+      }
+
+      saveTodos();
+
+      // DDL 相关字段 → 增量更新第二行，不重绘（保持详情展开）
+      if (field === 'ddlType' || field === 'ddlDatetime') {
+        updateTodoItemMeta(li, todo);
+        return;
+      }
+
+      // 备注字段 → 增量更新第三行，不重绘
+      if (field === 'notes') {
+        updateTodoItemSummaryRow(li, todo);
+        return;
+      }
+    });
+
+    // ---- 8c. focusout 事件（兜底 datetime-local 的 change 事件不可靠） ----
+    //    focusout 会冒泡，无需捕获阶段。当用户离开 datetime-local 输入框时，
+    //    检测值是否变化，变化则更新数据和显示。
+    todoListWrapper.addEventListener('focusout', (e) => {
+      const field = e.target.dataset.field;
+      if (field !== 'ddlDatetime') return;
+
+      const li = e.target.closest('.todo-item');
+      if (!li) return;
+      const id = parseInt(li.dataset.id);
+      const todo = todos.find(t => t.id === id);
+      if (!todo) return;
+
+      const newValue = e.target.value || null;
+      if (todo.ddlDatetime !== newValue) {
+        todo.ddlDatetime = newValue;
+        saveTodos();
+        updateTodoItemMeta(li, todo);
+      }
+    });
+
+    // ============================================================
+    // 九、清除已完成
+    // ============================================================
+    function clearCompleted() {
+      const items = todoListWrapper.querySelectorAll('.todo-item.completed');
+      if (items.length === 0) return;
+      items.forEach(item => item.classList.add('fade-out'));
+      const lastItem = items[items.length - 1];
+      lastItem.addEventListener('animationend', () => {
+        todos = todos.filter(t => !t.completed);
+        saveTodos();
+        renderTodoList();
+      }, { once: true });
+    }
+
+    // ============================================================
+    // 十、导出/导入
+    // ============================================================
+    function exportData() {
+      const json = JSON.stringify(todos, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'todos-data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importData(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!Array.isArray(data)) throw new Error('格式错误');
+          todos = data.map(migrateTodo);
+          saveTodos();
+          renderTodoList();
+          alert(`成功导入 ${todos.length} 条待办事项！`);
+        } catch (err) {
+          alert('导入失败：文件格式不正确。');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    async function tryAutoLoadJSON() {
+      try {
+        const resp = await fetch('./todos-data.json');
+        if (!resp.ok) return false;
+        const data = await resp.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const merged = [...data.map(migrateTodo)];
+          for (const t of todos) {
+            if (!merged.find(m => m.id === t.id)) merged.push(t);
+          }
+          todos = merged;
+          saveTodos();
+          return true;
+        }
+      } catch (e) { /* 静默 */ }
+      return false;
+    }
+
+    // ============================================================
+    // 十一、顶层事件绑定
+    // ============================================================
+    addBtn.addEventListener('click', addTodo);
+    todoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addTodo();
+    });
+
+    // 输入区 DDL 类型切换
+    inputDdlType.addEventListener('change', () => {
+      const isDatetime = inputDdlType.value === 'datetime';
+      inputDdlDatetime.style.display = isDatetime ? '' : 'none';
+      if (!isDatetime) inputDdlDatetime.value = '';
+    });
+
+    clearCompletedBtn.addEventListener('click', clearCompleted);
+    exportBtn.addEventListener('click', exportData);
+    importBtn.addEventListener('click', () => importFileInput.click());
+    importFileInput.addEventListener('change', () => {
+      if (importFileInput.files.length > 0) {
+        importData(importFileInput.files[0]);
+        importFileInput.value = '';
+      }
+    });
+
+    // 手动加载 config.json（file:// 协议时的降级方案）
+    function triggerConfigFilePicker() {
+      if (aiConfig._fileProtocol && !aiConfig._fileLoaded) {
+        configFileInput.click();
+      }
+    }
+    configWarn.addEventListener('click', triggerConfigFilePicker);
+    configStatus.addEventListener('click', triggerConfigFilePicker);
+    configFileInput.addEventListener('change', () => {
+      if (configFileInput.files.length > 0) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const cfg = JSON.parse(e.target.result);
+            aiConfig._fileLoaded = true;
+            aiConfig.apiKey      = cfg.deepseekApiKey || null;
+            aiConfig.fileEnabled = cfg.enableSummary !== false;
+            updateConfigUI();
+            // 配置加载成功后，为已有长备注触发总结
+            if (isSummaryAvailable()) {
+              todos.forEach(todo => {
+                if (todo.notes && todo.notes.trim().length > SUMMARY_CHAR_THRESHOLD && !todo.notesSummary) {
+                  triggerSummary(todo);
+                }
+              });
+            }
+          } catch (err) {
+            alert('config.json 格式不正确');
+          }
+        };
+        reader.readAsText(configFileInput.files[0]);
+        configFileInput.value = '';
+      }
+    });
+
+    // AI 开关
+    aiToggle.addEventListener('change', () => {
+      aiToggleEnabled = aiToggle.checked;
+      localStorage.setItem('ai_toggle_enabled', aiToggleEnabled);
+      // 开关打开时，为已有事项补充总结
+      if (aiToggleEnabled && isSummaryAvailable()) {
+        todos.forEach(todo => {
+          if (todo.notes && todo.notes.trim().length > SUMMARY_CHAR_THRESHOLD && !todo.notesSummary) {
+            triggerSummary(todo);
+          }
+        });
+      }
+    });
+
+    // ============================================================
+    // 十二、启动入口
+    // ============================================================
+    async function init() {
+      loadTodos();                     // localStorage
+      await loadConfig();              // config.json（AI 配置）
+      await tryAutoLoadJSON();         // 共享 JSON 文件
+      renderTodoList();                // 首次渲染
+    }
+    init();
+  </script>
+</body>
+</html>
