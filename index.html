@@ -433,6 +433,12 @@
       to   { opacity: 0; transform: scale(0.9); }
     }
 
+    /* 版本号 */
+    .version-line {
+      text-align: center; font-size: 10px; color: rgba(255,255,255,0.15);
+      margin-top: 14px; user-select: none;
+    }
+
     /* ========== 底部操作栏 ========== */
     .footer {
       display: flex; justify-content: space-between; align-items: center;
@@ -574,6 +580,7 @@
     </div>
     <input type="file" id="importFileInput" accept=".json" />
     <input type="file" id="configFileInput" accept=".json" style="display:none;" />
+    <p class="version-line">v2.1.7</p>
   </div>
 
   <!-- ==================== JavaScript ==================== -->
