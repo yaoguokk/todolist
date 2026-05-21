@@ -1,4 +1,26 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, devices } = require('@playwright/test');
+
+// 移动端测试单独运行
+test.use({ ...devices['Pixel 5'] });
+
+test.describe('移动端适配', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+  });
+
+  test('移动端页面正常显示', async ({ page }) => {
+    await expect(page.locator('h1')).toContainText('我的待办清单');
+  });
+
+  test('移动端添加任务', async ({ page }) => {
+    await page.fill('#todoInput', '移动端任务');
+    await page.tap('#addBtn');
+
+    await expect(page.locator('.todo-item')).toContainText('移动端任务');
+  });
+});
 
 test.describe('待办清单核心功能', () => {
   test.beforeEach(async ({ page }) => {
@@ -200,21 +222,3 @@ test.describe('今日总结功能', () => {
   });
 });
 
-test.describe('移动端适配', () => {
-  test.use({ ...devices['Pixel 5'] });
-
-  test('移动端页面正常显示', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('h1')).toContainText('我的待办清单');
-  });
-
-  test('移动端添加任务', async ({ page }) => {
-    await page.evaluate(() => localStorage.clear());
-    await page.reload();
-
-    await page.fill('#todoInput', '移动端任务');
-    await page.tap('#addBtn');
-
-    await expect(page.locator('.todo-item')).toContainText('移动端任务');
-  });
-});
