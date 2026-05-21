@@ -790,7 +790,7 @@
     </div>
     <input type="file" id="importFileInput" accept=".json" />
     <input type="file" id="configFileInput" accept=".json" style="display:none;" />
-    <p class="version-line">v2.2.2</p>
+    <p class="version-line">v2.2.3</p>
   </div>
 
   <!-- ====== 截图识别弹窗 ====== -->
@@ -877,6 +877,7 @@
     const STORAGE_KEY = 'my_todo_list_v2_1';
     const SUMMARY_CHAR_THRESHOLD = 120;  // 备注超过 120 字符触发 AI 总结
     let todos = [];
+    let todoMap = new Map();
 
     // ---- 工具：生成当前时间字符串 ----
     function formatNow() {
@@ -920,18 +921,24 @@
     }
 
     // ---- localStorage 读写 ----
+    function syncTodoMap() {
+      todoMap = new Map(todos.map(t => [t.id, t]));
+    }
+
     function saveTodos() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+      syncTodoMap();
     }
 
     function loadTodos() {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { todos = []; return; }
+      if (!raw) { todos = []; syncTodoMap(); return; }
       try {
         todos = JSON.parse(raw).map(migrateTodo);
       } catch (e) {
         todos = [];
       }
+      syncTodoMap();
     }
 
     // ---- 数据迁移：兼容旧版字段 ----
@@ -1301,7 +1308,7 @@
           const itemLi = this.closest('.todo-item');
           if (!itemLi) return;
           const todoId = parseInt(itemLi.dataset.id);
-          const targetTodo = todos.find(t => t.id === todoId);
+          const targetTodo = todoMap.get(todoId);
           if (!targetTodo) return;
           targetTodo.ddlDatetime = this.value || null;
           saveTodos();
@@ -1432,7 +1439,7 @@
     function updateAllCountdowns() {
       document.querySelectorAll('.todo-countdown').forEach(el => {
         const todoId = parseInt(el.dataset.countdownId);
-        const todo = todos.find(t => t.id === todoId);
+        const todo = todoMap.get(todoId);
         if (!todo) return;
         el.textContent = getCountdownText(todo);
         el.className = 'todo-countdown ' + getUrgencyClass(todo);
@@ -1744,7 +1751,7 @@
       const li  = e.target.closest('.todo-item');
       if (!li) return;
       const id  = parseInt(li.dataset.id);
-      const todo = todos.find(t => t.id === id);
+      const todo = todoMap.get(id);
       if (!todo) return;
 
       const action = e.target.dataset.action;
@@ -1804,7 +1811,7 @@
       const li  = e.target.closest('.todo-item');
       if (!li) return;
       const id  = parseInt(li.dataset.id);
-      const todo = todos.find(t => t.id === id);
+      const todo = todoMap.get(id);
       if (!todo) return;
 
       const field = e.target.dataset.field;
@@ -1866,7 +1873,7 @@
       const li = e.target.closest('.todo-item');
       if (!li) return;
       const id = parseInt(li.dataset.id);
-      const todo = todos.find(t => t.id === id);
+      const todo = todoMap.get(id);
       if (!todo) return;
 
       const newValue = e.target.value || null;
