@@ -1,5 +1,24 @@
 # 交互式待办清单 — 更新日志
 
+## v2.2.2 (2026-05-21)
+
+### 开发体验
+
+- **引入 E2E 测试**：使用 Playwright 编写端到端测试，覆盖核心功能
+  - 测试框架：Playwright（支持 Chromium / Mobile Chrome）
+  - 测试覆盖：添加/完成/删除待办、DDL 设置、数据持久化、导出功能、今日总结、移动端适配
+  - 运行方式：`npm test`（命令行）/ `npm run test:ui`（可视化界面）
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `package.json` | Node.js 项目配置，定义测试脚本 |
+| `playwright.config.js` | Playwright 测试配置 |
+| `tests/todo.spec.js` | E2E 测试用例（15 个测试场景） |
+
+---
+
 ## v2.2.1 (2026-05-21)
 
 ### 优化改进

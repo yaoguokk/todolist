@@ -1,0 +1,18 @@
+{
+  "name": "todolist",
+  "version": "2.2.1",
+  "description": "交互式待办清单 - 单文件 HTML 应用",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "serve": "npx serve -l 3000"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "serve": "^14.2.0"
+  },
+  "keywords": ["todo", "todolist", "pwa"],
+  "author": "yaoguokk",
+  "license": "MIT"
+}
