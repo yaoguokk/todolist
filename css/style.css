@@ -597,6 +597,39 @@ h1 {
 }
 .modal-field-empty { color: rgba(255,255,255,0.2); font-style: italic; }
 
+/* 识别结果可编辑输入框 */
+.modal-field-input {
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  padding: 4px 8px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.modal-field-input:focus {
+  border-color: var(--accent-purple);
+}
+.modal-field-input::placeholder {
+  color: rgba(255,255,255,0.2);
+  font-style: italic;
+}
+.modal-field-input[type="datetime-local"] {
+  color-scheme: dark;
+  min-width: 0;
+}
+.modal-field-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+textarea.modal-field-input {
+  resize: vertical;
+  min-height: 40px;
+}
+
 /* 加载动画 */
 .modal-loading {
   display: flex; align-items: center; justify-content: center;

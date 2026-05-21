@@ -696,7 +696,7 @@ async function recognizeImage() {
   }
 }
 
-// ---- 预览识别结果 ----
+// ---- 预览识别结果（可编辑） ----
 function showRecognizedFields(fields) {
   modalFields.style.display = 'block';
   const labels = {
@@ -706,28 +706,50 @@ function showRecognizedFields(fields) {
   let html = '';
   for (const [key, label] of Object.entries(labels)) {
     const value = fields[key] || '';
-    html += `<div class="modal-field-row">
-      <span class="modal-field-label">${label}</span>
-      <span class="modal-field-value${value ? '' : ' modal-field-empty'}">${value ? escapeHTML(value) : '（未识别）'}</span>
-    </div>`;
+    if (key === 'notes') {
+      html += `<div class="modal-field-row">
+        <span class="modal-field-label">${label}</span>
+        <textarea class="modal-field-input" data-recog-field="${key}" rows="2" placeholder="（未识别）">${escapeHTML(value)}</textarea>
+      </div>`;
+    } else if (key === 'ddl') {
+      html += `<div class="modal-field-row">
+        <span class="modal-field-label">${label}</span>
+        <input class="modal-field-input" type="datetime-local" data-recog-field="${key}" value="${escapeHTML(value)}">
+      </div>`;
+    } else {
+      html += `<div class="modal-field-row">
+        <span class="modal-field-label">${label}</span>
+        <input class="modal-field-input" type="text" data-recog-field="${key}" value="${escapeHTML(value)}" placeholder="（未识别）">
+      </div>`;
+    }
   }
   modalFields.innerHTML = html;
   modalFillBtn.style.display = 'inline-block';
 }
 
-// ---- 填入输入区 ----
+// ---- 填入输入区（从弹窗可编辑字段读取） ----
 function fillInputFields() {
-  if (!recognizedFields) return;
-  const f = recognizedFields;
-  if (f.title)       todoInput.value = f.title;
-  if (f.notes)       notesInput.value = f.notes;
-  if (f.assignee)    inputAssignee.value = f.assignee;
-  if (f.department)  inputDepartment.value = f.department;
-  if (f.responsible) inputResponsible.value = f.responsible;
-  if (f.ddl) {
+  const getField = (key) => {
+    const el = modalFields.querySelector(`[data-recog-field="${key}"]`);
+    return el ? el.value.trim() : '';
+  };
+
+  const title       = getField('title');
+  const notes       = getField('notes');
+  const assignee    = getField('assignee');
+  const department  = getField('department');
+  const responsible = getField('responsible');
+  const ddl         = getField('ddl');
+
+  if (title)       todoInput.value = title;
+  if (notes)       notesInput.value = notes;
+  if (assignee)    inputAssignee.value = assignee;
+  if (department)  inputDepartment.value = department;
+  if (responsible) inputResponsible.value = responsible;
+  if (ddl) {
     inputDdlType.value = 'datetime';
     inputDdlDatetime.style.display = '';
-    inputDdlDatetime.value = f.ddl;
+    inputDdlDatetime.value = ddl;
   }
   closeRecognizeModal();
   todoInput.focus();
