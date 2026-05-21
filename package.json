@@ -1,6 +1,6 @@
 {
   "name": "todolist",
-  "version": "2.2.1",
+  "version": "2.2.3",
   "description": "交互式待办清单 - 单文件 HTML 应用",
   "scripts": {
     "test": "playwright test",
