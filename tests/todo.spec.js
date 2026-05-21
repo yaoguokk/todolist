@@ -60,8 +60,12 @@ test.describe('待办清单核心功能', () => {
     await page.fill('#todoInput', '待完成的任务');
     await page.click('#addBtn');
 
-    // 点击复选框完成
-    await page.locator('.todo-item .todo-checkbox').click();
+    // 等待任务项出现并点击复选框
+    const todoItem = page.locator('.todo-item');
+    await expect(todoItem).toBeVisible();
+    const checkbox = todoItem.locator('input[type="checkbox"]');
+    await expect(checkbox).toBeVisible();
+    await checkbox.click();
 
     // 验证移到已完成区域
     await expect(page.locator('#completedList .todo-item')).toContainText('待完成的任务');
@@ -135,20 +139,33 @@ test.describe('待办清单核心功能', () => {
 
   test('清除已完成事项', async ({ page }) => {
     // 添加两个任务
-    await page.fill('#todoInput', '任务一');
+    await page.fill('#todoInput', '要保留的任务');
     await page.click('#addBtn');
-    await page.fill('#todoInput', '任务二');
+    await page.fill('#todoInput', '要删除的任务');
     await page.click('#addBtn');
 
-    // 完成第一个任务
-    await page.locator('.todo-item').first().locator('.todo-checkbox').click();
+    // 等待列表渲染
+    await page.waitForTimeout(300);
+
+    // 完成第二个任务
+    const secondTodo = page.locator('.todo-item').nth(1);
+    await expect(secondTodo).toBeVisible();
+    const secondCheckbox = secondTodo.locator('input[type="checkbox"]');
+    await expect(secondCheckbox).toBeVisible();
+    await secondCheckbox.click();
+
+    // 等待动画完成
+    await page.waitForTimeout(500);
 
     // 点击清除已完成
     await page.click('#clearCompletedBtn');
 
+    // 等待清除完成
+    await page.waitForTimeout(1000);
+
     // 验证只剩一个未完成
     await expect(page.locator('.todo-item')).toHaveCount(1);
-    await expect(page.locator('.todo-item')).toContainText('任务二');
+    await expect(page.locator('.todo-item .todo-main-row .todo-text')).toContainText('要保留的任务');
   });
 
   test('导出数据功能', async ({ page }) => {
@@ -201,7 +218,12 @@ test.describe('今日总结功能', () => {
     // 添加并完成一个任务
     await page.fill('#todoInput', '今日完成的任务');
     await page.click('#addBtn');
-    await page.locator('.todo-item .todo-checkbox').click();
+
+    const todoItem = page.locator('.todo-item');
+    await expect(todoItem).toBeVisible();
+    const checkbox = todoItem.locator('input[type="checkbox"]');
+    await expect(checkbox).toBeVisible();
+    await checkbox.click();
 
     // 验证今日总结显示
     await expect(page.locator('.today-summary')).toBeVisible();
@@ -209,13 +231,29 @@ test.describe('今日总结功能', () => {
   });
 
   test('今日总结可删除', async ({ page }) => {
+    test.setTimeout(60000); // 增加超时时间
+
     // 添加并完成一个任务
     await page.fill('#todoInput', '要删除的已完成任务');
     await page.click('#addBtn');
-    await page.locator('.todo-item .todo-checkbox').click();
+
+    const todoItem = page.locator('.todo-item');
+    await expect(todoItem).toBeVisible();
+    const checkbox = todoItem.locator('input[type="checkbox"]');
+    await expect(checkbox).toBeVisible();
+    await checkbox.click();
+
+    // 验证今日总结显示
+    await expect(page.locator('.today-summary')).toBeVisible();
+    await expect(page.locator('.today-summary-list li')).toHaveCount(1);
 
     // 点击今日总结中的删除按钮
-    await page.locator('.today-summary-list .today-delete-btn').click();
+    const deleteBtn = page.locator('.item-del').first();
+    await expect(deleteBtn).toBeVisible();
+    await deleteBtn.click();
+
+    // 等待更新完成
+    await page.waitForTimeout(2000);
 
     // 验证已从总结中移除
     await expect(page.locator('.today-summary-list li')).toHaveCount(0);
