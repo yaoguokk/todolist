@@ -1,5 +1,29 @@
 # 交互式待办清单 — 更新日志
 
+## v2.3.0 (2026-05-21)
+
+### 架构重构
+
+- **单文件拆分为多文件结构**：`index.html`（~2070 行）拆分为 5 个文件
+  - `index.html`（~130 行）：纯 HTML 结构，引用外部 CSS/JS
+  - `css/style.css`（~500 行）：所有样式，独立维护
+  - `js/utils.js`（~80 行）：工具函数（formatNow, escapeHTML, showToast, formatDatetime, getDeadline, getCountdownText, getUrgencyClass）
+  - `js/storage.js`（~65 行）：数据持久化（todos, todoMap, saveTodos, loadTodos, migrateTodo）
+  - `js/app.js`（~520 行）：主逻辑（DOM 引用、AI 配置、渲染、事件处理、导入导出、初始化）
+- JS 文件通过全局变量通信，按 `utils → storage → app` 顺序加载，无需 ES module
+- Service Worker 缓存列表更新，包含新的 CSS/JS 文件
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `css/style.css` | 全部样式（毛玻璃暗色主题、响应式） |
+| `js/utils.js` | 工具函数（日期格式化、HTML 转义、Toast 通知、DDL 计算） |
+| `js/storage.js` | localStorage 读写、数据迁移 |
+| `js/app.js` | 主应用逻辑（渲染、事件、AI 配置、截图识别） |
+
+---
+
 ## v2.2.3 (2026-05-21)
 
 ### 性能优化

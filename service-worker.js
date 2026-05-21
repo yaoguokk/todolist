@@ -1,7 +1,11 @@
-const CACHE_NAME = 'todolist-v2.2.3';
+const CACHE_NAME = 'todolist-v2.3.0';
 const CACHE_FILES = [
   './',
   './index.html',
+  './css/style.css',
+  './js/utils.js',
+  './js/storage.js',
+  './js/app.js',
   './manifest.json',
   './icon.svg'
 ];
