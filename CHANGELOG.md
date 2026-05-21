@@ -14,6 +14,10 @@
 
 - **刘海屏遮挡标题**：移动端 body padding-top 从硬编码 `24px` 改为 `max(44px, env(safe-area-inset-top))`，修复 iPhone 刘海/灵动岛遮挡页面头部的问题。
 
+- **今日 DDL 新建后显示「长期」**：新建待办时切换到「指定时间」后，iOS 原生选择器默认显示当天日期但不会主动写入 input.value，导致 DDL 被当作 null 回退为「长期」。修复：切换到 datetime 模式时自动预填当前时间（+1 分钟）。
+
+- **AI 总结点击无效**：`deepseek-v4-flash` 升级为推理模型后，`max_tokens=60` 全部被推理消耗，输出为空。修复：`max_tokens` 调至 200。
+
 ### 数据结构
 
 - 新增 `completedAt` 字段（字符串格式 `YYYY-MM-DD HH:mm`），记录事项被勾选完成的时间。旧数据迁移时该字段默认为 `null`。

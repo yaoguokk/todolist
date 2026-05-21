@@ -419,7 +419,14 @@
 
     /* 属性行 */
     .attr-row { display: flex; gap: 8px; flex-wrap: wrap; }
-    .attr-row input { flex: 1; min-width: 100px; }
+    .attr-row input {
+      flex: 1; min-width: 100px;
+      padding: 7px 10px; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; font-size: 13px; outline: none;
+      background: rgba(255,255,255,0.07); color: #e0e0e0;
+      transition: border-color 0.25s; font-family: inherit;
+    }
+    .attr-row input:focus { border-color: rgba(167,139,250,0.5); }
 
     /* ========== 淡入/淡出动画 ========== */
     .todo-item.fade-in  { animation: fadeIn 0.4s ease-out; }
@@ -549,6 +556,12 @@
         </select>
         <input type="datetime-local" id="inputDdlDatetime" style="display:none;">
       </div>
+      <!-- 属性字段：创建时即可填写 -->
+      <div class="attr-row">
+        <input type="text" id="inputAssignee"    placeholder="任务分配人（可选）">
+        <input type="text" id="inputDepartment"  placeholder="责任部门（可选）">
+        <input type="text" id="inputResponsible" placeholder="责任人（可选）">
+      </div>
     </div>
 
     <!-- ====== 待办列表 ====== -->
@@ -601,6 +614,9 @@
     const incompleteCount   = document.getElementById('incompleteCount');
     const completedCount    = document.getElementById('completedCount');
     const countNumber       = document.getElementById('countNumber');
+    const inputAssignee      = document.getElementById('inputAssignee');
+    const inputDepartment    = document.getElementById('inputDepartment');
+    const inputResponsible   = document.getElementById('inputResponsible');
     const clearCompletedBtn = document.getElementById('clearCompletedBtn');
     const emptyHint         = document.getElementById('emptyHint');
     const exportBtn         = document.getElementById('exportBtn');
@@ -814,7 +830,7 @@
               { role: 'system', content: '你是一个任务概述助手。用不超过25个汉字总结用户提供的任务备注，必须保留任务主题和关键要求，去掉废话。只输出总结句子，不要加任何前缀或解释。' },
               { role: 'user', content: notes }
             ],
-            max_tokens: 60,
+            max_tokens: 200,
             temperature: 0.3
           })
         });
@@ -1166,9 +1182,9 @@
         ddlDatetime:   inputDdlDatetime.value || null,       // 从输入区读取
         notes:         notes,
         notesSummary:  '',
-        assignee:      '',
-        department:    '',
-        responsible:   ''
+        assignee:      inputAssignee.value.trim(),
+        department:    inputDepartment.value.trim(),
+        responsible:   inputResponsible.value.trim()
       };
 
       todos.unshift(newTodo);
@@ -1186,6 +1202,9 @@
       inputDdlType.value = 'long-term';
       inputDdlDatetime.value = '';
       inputDdlDatetime.style.display = 'none';
+      inputAssignee.value = '';
+      inputDepartment.value = '';
+      inputResponsible.value = '';
       todoInput.focus();
     }
 
@@ -1417,7 +1436,15 @@
     inputDdlType.addEventListener('change', () => {
       const isDatetime = inputDdlType.value === 'datetime';
       inputDdlDatetime.style.display = isDatetime ? '' : 'none';
-      if (!isDatetime) inputDdlDatetime.value = '';
+      if (!isDatetime) {
+        inputDdlDatetime.value = '';
+      } else {
+        // 预填默认值，防止移动端原生选择器不提交 value
+        const now = new Date();
+        now.setMinutes(now.getMinutes() + 1); // +1 分钟避免刚好过期
+        const pad = (n) => String(n).padStart(2, '0');
+        inputDdlDatetime.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      }
     });
 
     clearCompletedBtn.addEventListener('click', clearCompleted);
