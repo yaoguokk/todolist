@@ -649,6 +649,58 @@
     }
     .modal-btn.secondary:hover { background: rgba(255,255,255,0.12); color: #fff; }
 
+    /* ========== Toast 通知 ========== */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .toast {
+      background: rgba(30, 30, 50, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 12px;
+      padding: 14px 18px;
+      min-width: 260px;
+      max-width: 380px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      pointer-events: auto;
+      animation: toast-in 0.3s ease-out;
+      border-left: 4px solid;
+    }
+    .toast.error { border-left-color: #ef4444; }
+    .toast.warning { border-left-color: #f59e0b; }
+    .toast.success { border-left-color: #22c55e; }
+    .toast.info { border-left-color: #3b82f6; }
+    .toast-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #fff;
+    }
+    .toast-message {
+      font-size: 13px;
+      color: rgba(255,255,255,0.75);
+      line-height: 1.4;
+    }
+    .toast.error .toast-title { color: #fca5a5; }
+    .toast.warning .toast-title { color: #fcd34d; }
+    .toast.success .toast-title { color: #86efac; }
+    .toast.info .toast-title { color: #93c5fd; }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(40px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toast-out {
+      from { opacity: 1; transform: translateX(0); }
+      to { opacity: 0; transform: translateX(40px); }
+    }
+
     /* ========== 响应式 ========== */
     @media (max-width: 520px) {
       body { padding-top: max(44px, env(safe-area-inset-top)); }
@@ -738,7 +790,7 @@
     </div>
     <input type="file" id="importFileInput" accept=".json" />
     <input type="file" id="configFileInput" accept=".json" style="display:none;" />
-    <p class="version-line">v2.2.0</p>
+    <p class="version-line">v2.2.1</p>
   </div>
 
   <!-- ====== 截图识别弹窗 ====== -->
@@ -838,6 +890,24 @@
       const div = document.createElement('div');
       div.textContent = str;
       return div.innerHTML;
+    }
+
+    // ---- Toast 通知系统 ----
+    function showToast(type, title, message, duration = 4000) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `
+        <div class="toast-title">${escapeHTML(title)}</div>
+        <div class="toast-message">${escapeHTML(message)}</div>
+      `;
+      container.appendChild(toast);
+
+      // 自动消失
+      setTimeout(() => {
+        toast.style.animation = 'toast-out 0.3s ease-out forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
     }
 
     // ---- 工具：ISO datetime-local 字符串转显示格式 ----
@@ -1005,8 +1075,8 @@
 
     // ---- 调用 DeepSeek API 总结备注 ----
     async function summarizeNotes(notes) {
-      if (!isSummaryAvailable()) return null;
-      if (!notes || notes.length <= SUMMARY_CHAR_THRESHOLD) return null;
+      if (!isSummaryAvailable()) return { summary: null, error: 'AI 功能未配置' };
+      if (!notes || notes.length <= SUMMARY_CHAR_THRESHOLD) return { summary: null, error: null };
 
       try {
         const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -1026,12 +1096,19 @@
           })
         });
 
-        if (!resp.ok) return null;
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => '');
+          let errMsg = `请求失败 (${resp.status})`;
+          if (resp.status === 401) errMsg = 'API Key 无效';
+          else if (resp.status === 429) errMsg = 'API 请求频繁，稍后重试';
+          else if (resp.status >= 500) errMsg = 'API 服务暂时不可用';
+          return { summary: null, error: errMsg };
+        }
         const data = await resp.json();
         const summary = data.choices?.[0]?.message?.content?.trim();
-        return summary || null;
+        return { summary: summary || null, error: null };
       } catch (e) {
-        return null;
+        return { summary: null, error: '网络连接失败，请检查网络' };
       }
     }
 
@@ -1048,7 +1125,10 @@
         if (summaryText) summaryText.innerHTML = '<span class="summary-loading">AI 总结中…</span>';
       }
 
-      const summary = await summarizeNotes(todo.notes);
+      const { summary, error } = await summarizeNotes(todo.notes);
+      if (error) {
+        showToast('error', 'AI 总结失败', error);
+      }
       todo.notesSummary = summary || '';  // 失败时为空字符串
       saveTodos();
 
@@ -1539,6 +1619,7 @@
       modalFields.style.display = 'none';
       modalFillBtn.style.display = 'none';
 
+      let errorMsg = null;
       try {
         const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
           method: 'POST',
@@ -1550,15 +1631,23 @@
         });
 
         if (!resp.ok) {
-          const errText = await resp.text();
+          const errText = await resp.text().catch(() => '');
           console.error('智谱 API 错误:', resp.status, errText);
+          errorMsg = `识别失败 (${resp.status})`;
+          if (resp.status === 401) errorMsg = 'API Key 无效';
+          else if (resp.status === 429) errorMsg = 'API 请求频繁，稍后重试';
+          else if (resp.status >= 500) errorMsg = 'API 服务暂时不可用';
           recognizedFields = null;
         } else {
           const data = await resp.json();
           recognizedFields = parseZhipuResponse(data);
+          if (!recognizedFields) {
+            errorMsg = 'AI 返回数据格式异常';
+          }
         }
       } catch (e) {
         console.error('识别请求失败:', e);
+        errorMsg = '网络连接失败，请检查网络';
         recognizedFields = null;
       }
 
@@ -1566,12 +1655,15 @@
       modalRecognizeBtn.disabled = false;
       modalRecognizeBtn.textContent = '🔍 识别';
 
-      if (recognizedFields && Object.values(recognizedFields).some(v => v)) {
+      if (errorMsg) {
+        showToast('error', '截图识别失败', errorMsg);
+        modalFields.style.display = 'block';
+        modalFields.innerHTML = `<div class="modal-field-row"><span class="modal-field-empty">⚠️ ${errorMsg}</span></div>`;
+      } else if (recognizedFields && Object.values(recognizedFields).some(v => v)) {
         showRecognizedFields(recognizedFields);
       } else {
         modalFields.style.display = 'block';
         modalFields.innerHTML = '<div class="modal-field-row"><span class="modal-field-empty">未能识别出任务信息，请尝试更清晰的截图</span></div>';
-        modalRecognizeBtn.disabled = false;
       }
     }
 
@@ -1961,6 +2053,9 @@
       navigator.serviceWorker.register('./service-worker.js');
     }
   </script>
+
+  <!-- Toast 通知容器 -->
+  <div class="toast-container" id="toastContainer"></div>
 
 </body>
 </html>
