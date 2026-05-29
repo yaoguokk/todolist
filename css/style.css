@@ -296,8 +296,17 @@ h1 {
 }
 .todo-text {
   flex: 1; font-size: 15px; word-break: break-word; transition: all 0.3s;
+  cursor: pointer;
 }
-.todo-item.completed .todo-text { text-decoration: line-through; opacity: 0.5; }
+.todo-item.completed .todo-text { text-decoration: line-through; opacity: 0.5; cursor: default; }
+/* 行内编辑标题输入框 */
+.todo-text-edit {
+  flex: 1; font-size: 15px; padding: 2px 6px;
+  border: 1px solid rgba(167,139,250,0.5); border-radius: 6px;
+  background: rgba(255,255,255,0.08); color: #f0f0f0;
+  outline: none; font-family: inherit;
+  box-shadow: 0 0 0 2px rgba(167,139,250,0.12);
+}
 .delete-btn {
   flex-shrink: 0; width: 32px; height: 32px; border: none;
   border-radius: 8px; cursor: pointer; font-size: 16px;

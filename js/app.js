@@ -262,7 +262,7 @@ function renderTodoList(animateNewItemId = null) {
         <!-- 第一行：复选框 + 标题 + 删除 -->
         <div class="todo-main-row">
           <input type="checkbox" data-action="toggle" ${todo.completed ? 'checked' : ''}>
-          <span class="todo-text">${escapeHTML(todo.text)}</span>
+          <span class="todo-text" data-action="edit-title">${escapeHTML(todo.text)}</span>
           <button class="delete-btn" data-action="delete" title="删除事项">&#10005;</button>
         </div>
 
@@ -835,6 +835,41 @@ todoListWrapper.addEventListener('click', (e) => {
     if (!fullText) return;
     const isOpen = fullText.classList.toggle('open');
     e.target.textContent = isOpen ? '收起 ▲' : '展开原文 ▾';
+    return;
+  }
+
+  // 行内编辑标题
+  if (action === 'edit-title') {
+    const span = e.target;
+    const oldText = todo.text;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'todo-text-edit';
+    input.value = oldText;
+    input.maxLength = 200;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const save = () => {
+      const newText = input.value.trim();
+      if (newText && newText !== oldText) {
+        todo.text = newText;
+        saveTodos();
+      }
+      // 替换回 span
+      const newSpan = document.createElement('span');
+      newSpan.className = 'todo-text';
+      newSpan.dataset.action = 'edit-title';
+      newSpan.textContent = todo.text;
+      input.replaceWith(newSpan);
+    };
+
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { input.value = oldText; input.blur(); }
+    });
     return;
   }
 
